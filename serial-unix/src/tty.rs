@@ -3,9 +3,10 @@ use libc;
 use termios;
 use ioctl;
 
-use std::ffi::CString;
 use std::io;
+use std::ffi::CStr;
 use std::path::Path;
+use std::ffi::CString;
 use std::time::Duration;
 
 use std::os::unix::prelude::*;
@@ -33,7 +34,61 @@ pub struct TTYPort {
     timeout: Duration,
 }
 
+#[allow(dead_code)]
 impl TTYPort {
+    /// Build a pseudo TTY device as a master serial port.
+    ///
+    /// ```no_run
+    /// serial_unix::TTYPort::build().unwrap();
+    /// ```
+    ///
+    /// ## Errors
+    ///
+    /// * `Io` for any other error while opening or initializing the device.
+    pub fn build() -> core::Result<(Self, String)> {
+        use libc::F_SETFL;
+
+        let mut master_fd: c_int = 0;
+        let buffer = unsafe { CStr::from_bytes_with_nul_unchecked(&[0; 128]) };
+
+        let status = unsafe {
+            let status = libc::openpty(&mut master_fd as *mut c_int, ::std::ptr::null::<c_int>() as *mut c_int,
+                                       buffer.as_ptr() as *mut i8, ::std::ptr::null(), ::std::ptr::null());
+            status
+        };
+        let name = buffer.to_str().unwrap();
+
+        if status < 0 {
+            return Err(super::error::last_os_error());
+        }
+
+        let mut port = TTYPort {
+            fd: master_fd,
+            timeout: Duration::from_millis(100),
+        };
+
+        // Set nonblocking
+        if let Err(err) = port.set_nonblocking() {
+            return Err(err);
+        }
+
+        // get exclusive access to device
+        if let Err(err) = ioctl::tiocexcl(port.fd) {
+            return Err(super::error::from_io_error(err));
+        }
+
+        // clear O_NONBLOCK flag
+        if unsafe { libc::fcntl(port.fd, F_SETFL, 0) } < 0 {
+            return Err(super::error::last_os_error());
+        }
+
+        // apply initial settings
+        let settings = try!(port.read_settings());
+        try!(port.write_settings(&settings));
+
+        Ok((port, name.to_string()))
+    }
+
     /// Opens a TTY device as a serial port.
     ///
     /// `path` should be the path to a TTY device, e.g., `/dev/ttyS0`.
@@ -85,7 +140,22 @@ impl TTYPort {
         Ok(port)
     }
 
-    fn set_pin(&mut self, pin: c_int, level: bool) -> core::Result<()> {
+    fn set_nonblocking(&self) -> core::Result<()> {
+        use libc::{O_NONBLOCK, F_SETFL, F_GETFL};
+
+        let mut opt = unsafe { libc::fcntl(self.fd, F_GETFL) };
+        if opt < 0 {
+            return Err(super::error::last_os_error())
+        }
+
+        opt |= O_NONBLOCK;
+        if unsafe { libc::fcntl(self.fd, F_SETFL, opt) } < 0 {
+            return Err(super::error::last_os_error())
+        }
+        Ok(())
+    }
+
+    fn set_pin(&self, pin: c_int, level: bool) -> core::Result<()> {
         let retval = if level {
             ioctl::tiocmbis(self.fd, pin)
         }
@@ -99,7 +169,7 @@ impl TTYPort {
         }
     }
 
-    fn read_pin(&mut self, pin: c_int) -> core::Result<bool> {
+    fn read_pin(&self, pin: c_int) -> core::Result<bool> {
         match ioctl::tiocmget(self.fd) {
             Ok(pins) => Ok(pins & pin != 0),
             Err(err) => Err(super::error::from_io_error(err)),
