@@ -46,20 +46,17 @@ impl TTYPort {
     ///
     /// * `Io` for any other error while opening or initializing the device.
     pub fn build() -> core::Result<(Self, String)> {
-        use libc::F_SETFL;
+        /*use libc::F_SETFL;*/
 
         let mut master_fd: c_int = 0;
-        let mut slave_fd: c_int = 0;
 
         // Created here to be the real buffer until transformed to String
         let tmp_buffer = [0; 128];
         let buffer = unsafe { CStr::from_bytes_with_nul_unchecked(&tmp_buffer) };
 
         let status = unsafe {
-            let status = libc::openpty(&mut master_fd as *mut c_int, &mut slave_fd as *mut c_int,
-                                       buffer.as_ptr() as *mut i8, ::std::ptr::null(), ::std::ptr::null());
-            libc::close(slave_fd);
-            status
+            libc::openpty(&mut master_fd as *mut c_int, ::std::ptr::null::<c_int>() as *mut i32,
+                                       buffer.as_ptr() as *mut i8, ::std::ptr::null(), ::std::ptr::null())
         };
         let name = buffer.to_str().unwrap();
 
@@ -73,9 +70,9 @@ impl TTYPort {
         };
 
         // Set nonblocking
-        if let Err(err) = port.set_nonblocking() {
+        /*if let Err(err) = port.set_nonblocking() {
             return Err(err);
-        }
+        }*/
 
         // get exclusive access to device
         if let Err(err) = ioctl::tiocexcl(port.fd) {
@@ -83,9 +80,9 @@ impl TTYPort {
         }
 
         // clear O_NONBLOCK flag
-        if unsafe { libc::fcntl(port.fd, F_SETFL, 0) } < 0 {
+        /*if unsafe { libc::fcntl(port.fd, F_SETFL, 0) } < 0 {
             return Err(super::error::last_os_error());
-        }
+        }*/
 
         // apply initial settings
         let settings = try!(port.read_settings());
