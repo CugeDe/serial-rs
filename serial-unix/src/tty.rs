@@ -72,20 +72,10 @@ impl TTYPort {
             timeout: Duration::from_millis(100),
         };
 
-        // Set nonblocking
-        /*if let Err(err) = port.set_nonblocking() {
-            return Err(err);
-        }*/
-
         // get exclusive access to device
         if let Err(err) = ioctl::tiocexcl(port.fd) {
             return Err(super::error::from_io_error(err));
         }
-
-        // clear O_NONBLOCK flag
-        /*if unsafe { libc::fcntl(port.fd, F_SETFL, 0) } < 0 {
-            return Err(super::error::last_os_error());
-        }*/
 
         // apply initial settings
         let settings = try!(port.read_settings());
