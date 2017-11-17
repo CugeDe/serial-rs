@@ -67,6 +67,24 @@ pub fn open<T: AsRef<OsStr> + ?Sized>(port: &T) -> ::core::Result<SystemPort> {
     unix::TTYPort::open(Path::new(port))
 }
 
+/// A convenience function for building a pseudo master serial port.
+///
+/// ## Errors
+///
+/// This function returns an error if the device could not be opened and initialized:
+///
+/// * `Io` for any other error while opening or initializing the device.
+///
+/// ## Examples
+///
+/// ```no_run
+/// let (port, filename) = serial::build().unwrap();
+/// ```
+#[cfg(unix)]
+pub fn build() -> ::core::Result<(SystemPort, String)> {
+    unix::TTYPort::build()
+}
+
 /// A convenience function for opening a native serial port.
 ///
 /// The argument must be one that's understood by the target operating system to identify a serial
