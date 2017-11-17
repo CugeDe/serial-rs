@@ -50,7 +50,10 @@ impl TTYPort {
 
         let mut master_fd: c_int = 0;
         let mut slave_fd: c_int = 0;
-        let buffer = unsafe { CStr::from_bytes_with_nul_unchecked(&[0; 128]) };
+
+        // Created here to be the real buffer until transformed to String
+        let tmp_buffer = [0; 128];
+        let buffer = unsafe { CStr::from_bytes_with_nul_unchecked(&tmp_buffer) };
 
         let status = unsafe {
             let status = libc::openpty(&mut master_fd as *mut c_int, &mut slave_fd as *mut c_int,
