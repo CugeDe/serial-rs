@@ -46,17 +46,18 @@ impl TTYPort {
     ///
     /// * `Io` for any other error while opening or initializing the device.
     pub fn build() -> core::Result<(Self, String)> {
-        /*use libc::F_SETFL;*/
-
         let mut master_fd: c_int = 0;
+        let mut slave_fd: c_int = 0;
 
         // Created here to be the real buffer until transformed to String
         let tmp_buffer = [0; 128];
         let buffer = unsafe { CStr::from_bytes_with_nul_unchecked(&tmp_buffer) };
 
         let status = unsafe {
-            libc::openpty(&mut master_fd as *mut c_int, ::std::ptr::null::<c_int>() as *mut i32,
-                                       buffer.as_ptr() as *mut i8, ::std::ptr::null(), ::std::ptr::null())
+            let status = libc::openpty(&mut master_fd as *mut c_int, &mut slave_fd as *mut c_int,
+                                       buffer.as_ptr() as *mut i8, ::std::ptr::null(), ::std::ptr::null());
+            libc::close(slave_fd);
+            status
         };
         let name = buffer.to_str().unwrap();
 
