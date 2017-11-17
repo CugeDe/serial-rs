@@ -46,27 +46,29 @@ impl TTYPort {
     ///
     /// * `Io` for any other error while opening or initializing the device.
     pub fn build() -> core::Result<(Self, String)> {
-        let mut master_fd: c_int = 0;
-        let mut slave_fd: c_int = 0;
+        let fd: c_int = unsafe { libc::posix_openpt(libc::O_RDWR | libc::O_NOCTTY) };
 
-        // Created here to be the real buffer until transformed to String
-        let tmp_buffer = [0; 128];
-        let buffer = unsafe { CStr::from_bytes_with_nul_unchecked(&tmp_buffer) };
-
-        let status = unsafe {
-            let status = libc::openpty(&mut master_fd as *mut c_int, &mut slave_fd as *mut c_int,
-                                       buffer.as_ptr() as *mut i8, ::std::ptr::null(), ::std::ptr::null());
-            libc::close(slave_fd);
-            status
-        };
-        let name = buffer.to_str().unwrap();
-
-        if status < 0 {
+        if fd < 0 {
             return Err(super::error::last_os_error());
         }
 
+        if unsafe { libc::grantpt(fd) } < 0 {
+            return Err(super::error::last_os_error());
+        }
+
+        if unsafe { libc::unlockpt(fd) } < 0 {
+            return Err(super::error::last_os_error());
+        }
+
+        let buffer: *const libc::c_char = unsafe { libc::ptsname(fd) };
+        if buffer == ::std::ptr::null::<libc::c_char>() {
+            return Err(super::error::last_os_error());
+        }
+        let buffer = unsafe { CStr::from_ptr(buffer) };
+        let name = buffer.to_str().unwrap();
+
         let mut port = TTYPort {
-            fd: master_fd,
+            fd: fd,
             timeout: Duration::from_millis(100),
         };
 
