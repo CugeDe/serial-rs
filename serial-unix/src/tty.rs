@@ -170,6 +170,19 @@ impl TTYPort {
             Err(err) => Err(super::error::from_io_error(err)),
         }
     }
+
+    pub fn has_data(&self) -> core::Result<bool> {
+        let mut fds = libc::pollfd {events: libc::POLLIN, fd: self.fd, revents: 0};
+        let result = unsafe {
+            libc::poll(&mut fds, 1, 0)
+        };
+
+        match result {
+            1 => Ok(true),
+            0 => Ok(false),
+            _ => Err(super::error::last_os_error())
+        }
+    }
 }
 
 impl Drop for TTYPort {
